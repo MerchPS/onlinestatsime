@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IME Roleplay — Player Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0a0707;
+    --panel:#130c0d;
+    --panel-2:#1a1011;
+    --blood:#8c1015;
+    --blood-bright:#c81e2a;
+    --blood-deep:#4a0709;
+    --bone:#e9e1d8;
+    --bone-dim:#a89892;
+    --line:#2c1618;
+    --up:#5f8f5a;
+    --up-glow:#5f8f5a33;
+    --down:#c81e2a;
+    --warn:#b8862f;
+    --radius:2px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+
+  body{
+    background:
+      radial-gradient(ellipse at top, #1c0e0f 0%, var(--void) 55%),
+      var(--void);
+    color:var(--bone);
+    font-family:'JetBrains Mono', monospace;
+    min-height:100vh;
+    padding-bottom:40px;
+  }
+
+  ::selection{ background:var(--blood); color:var(--bone); }
+
+  /* subtle scanline texture, static, not animated */
+  .grain{
+    position:fixed; inset:0; pointer-events:none; z-index:1;
+    background-image:repeating-linear-gradient(
+      0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px,
+      transparent 1px, transparent 3px
+    );
+    mix-blend-mode:overlay;
+  }
+
+  /* ============ HEADER ============ */
+  header.topbar{
+    position:relative;
+    padding:28px 5vw 22px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    flex-wrap:wrap;
+    gap:20px;
+    align-items:flex-end;
+    justify-content:space-between;
+    overflow:hidden;
+  }
+
+  /* signature element: a single dripping blood rule under the header */
+  header.topbar::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:-1px;
+    height:6px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='24' viewBox='0 0 240 24'><path d='M0 4 L14 4 L14 18 Q14 24 17 24 Q20 24 20 18 L20 4 L48 4 L48 12 Q48 17 51 17 Q54 17 54 12 L54 4 L96 4 L96 20 Q96 24 99 24 Q102 24 102 20 L102 4 L150 4 L150 9 Q150 13 153 13 Q156 13 156 9 L156 4 L200 4 L200 15 Q200 20 203 20 Q206 20 206 15 L206 4 L240 4 L240 0 L0 0 Z' fill='%238c1015'/></svg>");
+    background-repeat:repeat-x;
+    background-size:240px 6px;
+    opacity:0.85;
+  }
+
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand-mark{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:clamp(38px, 6vw, 58px);
+    letter-spacing:2px;
+    line-height:0.9;
+    color:var(--bone);
+    text-shadow: 0 0 18px var(--blood-deep);
+  }
+  .brand-mark span{ color:var(--blood-bright); }
+  .brand-sub{
+    font-size:11px;
+    letter-spacing:4px;
+    color:var(--bone-dim);
+  }
+
+  .status-cluster{ display:flex; align-items:center; gap:26px; }
+
+  .status-badge{
+    display:flex; align-items:center; gap:9px;
+    padding:8px 16px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    font-size:12px;
+    letter-spacing:2px;
+    font-weight:600;
+  }
+  .status-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--bone-dim);
+    flex:none;
+  }
+  .status-badge.up .status-dot{ background:var(--up); box-shadow:0 0 8px var(--up); }
+  .status-badge.up{ color:var(--up); border-color:#2c3a2a; }
+  .status-badge.down .status-dot{ background:var(--down); box-shadow:0 0 8px var(--down); }
+  .status-badge.down{ color:var(--down); border-color:#3a1a1c; }
+  .status-badge.pending .status-dot{ background:var(--warn); }
+  .status-badge.pending{ color:var(--warn); }
+
+  .count-block{ text-align:right; line-height:1; }
+  .count-block .num{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:clamp(30px,4vw,42px);
+    color:var(--bone);
+  }
+  .count-block .num .max{ color:var(--bone-dim); font-size:0.6em; }
+  .count-block label{
+    display:block;
+    font-size:10px;
+    letter-spacing:3px;
+    color:var(--bone-dim);
+    margin-top:4px;
+  }
+
+  /* ============ CONTROL BAR ============ */
+  .control-bar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+    align-items:center;
+    padding:18px 5vw;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, #100a0b, transparent);
+  }
+
+  .search-wrap{
+    position:relative;
+    flex:1 1 260px;
+    min-width:200px;
+  }
+  .search-wrap input{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--bone);
+    padding:11px 14px 11px 34px;
+    font-family:inherit;
+    font-size:13px;
+    border-radius:var(--radius);
+  }
+  .search-wrap input:focus{
+    outline:none;
+    border-color:var(--blood);
+    box-shadow:0 0 0 1px var(--blood);
+  }
+  .search-wrap svg{
+    position:absolute; left:11px; top:50%; transform:translateY(-50%);
+    width:14px; height:14px; stroke:var(--bone-dim);
+  }
+
+  .sort-group{ display:flex; gap:6px; }
+  .sort-btn{
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--bone-dim);
+    font-family:inherit;
+    font-size:11px;
+    letter-spacing:1px;
+    padding:10px 13px;
+    cursor:pointer;
+    border-radius:var(--radius);
+    transition:color .15s, border-color .15s;
+    white-space:nowrap;
+  }
+  .sort-btn:hover{ color:var(--bone); border-color:var(--bone-dim); }
+  .sort-btn.active{ color:var(--bone); border-color:var(--blood-bright); background:var(--panel-2); }
+
+  .host-wrap{ display:flex; gap:8px; align-items:center; }
+  .host-wrap input{
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--bone-dim);
+    font-family:inherit;
+    font-size:12px;
+    padding:10px 12px;
+    border-radius:var(--radius);
+    width:200px;
+  }
+  .host-wrap input:focus{ outline:none; border-color:var(--blood); color:var(--bone); }
+  .reconnect-btn{
+    background:var(--blood-deep);
+    border:1px solid var(--blood);
+    color:var(--bone);
+    font-family:inherit;
+    font-size:11px;
+    letter-spacing:1px;
+    padding:10px 14px;
+    cursor:pointer;
+    border-radius:var(--radius);
+    transition:background .15s;
+  }
+  .reconnect-btn:hover{ background:var(--blood); }
+
+  /* ============ TABLE ============ */
+  main{ padding:22px 5vw 10px; }
+
+  .table-wrap{
+    border:1px solid var(--line);
+    background:var(--panel);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+
+  table{ width:100%; border-collapse:collapse; }
+
+  thead th{
+    text-align:left;
+    font-size:10.5px;
+    letter-spacing:2px;
+    color:var(--bone-dim);
+    font-weight:600;
+    padding:13px 16px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel-2);
+  }
+  thead th.num, td.num{ text-align:center; }
+
+  tbody tr{
+    border-bottom:1px solid var(--line);
+    transition:background .12s;
+  }
+  tbody tr:last-child{ border-bottom:none; }
+  tbody tr:hover{ background:#1d1213; }
+
+  td{ padding:12px 16px; font-size:13px; vertical-align:middle; }
+
+  .kantong-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:34px;
+    padding:3px 8px;
+    background:var(--blood-deep);
+    border:1px solid var(--blood);
+    color:var(--bone);
+    font-size:12px;
+    border-radius:var(--radius);
+  }
+
+  .player-name{ color:var(--bone); font-weight:500; }
+
+  .ping-val{ font-variant-numeric:tabular-nums; }
+  .ping-val.good{ color:var(--up); }
+  .ping-val.warn{ color:var(--warn); }
+  .ping-val.bad{ color:var(--down); }
+
+  .pl-val{ font-variant-numeric:tabular-nums; color:var(--bone-dim); }
+  .pl-val.bad{ color:var(--down); }
+  .pl-val.warn{ color:var(--warn); }
+
+  .conn-tag{
+    font-size:10.5px;
+    letter-spacing:1px;
+    padding:3px 8px;
+    border-radius:var(--radius);
+    border:1px solid var(--line);
+  }
+  .conn-tag.stabil{ color:var(--up); border-color:#2c3a2a; }
+  .conn-tag.sedang{ color:var(--warn); border-color:#3a2f1a; }
+  .conn-tag.buruk{ color:var(--down); border-color:#3a1a1c; }
+
+  .empty-row td{
+    text-align:center;
+    padding:48px 16px;
+    color:var(--bone-dim);
+    font-size:13px;
+  }
+  .empty-row .empty-icon{ font-size:28px; display:block; margin-bottom:10px; opacity:.5; }
+
+  /* ============ FOOTER ============ */
+  .foot-note{
+    padding:16px 5vw 0;
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    font-size:11px;
+    color:var(--bone-dim);
+  }
+  .foot-note .warn-text{ color:var(--warn); }
+
+  /* ============ RESPONSIVE (mobile card layout) ============ */
+  @media (max-width: 720px){
+    header.topbar{ padding:22px 5vw 20px; }
+    .status-cluster{ width:100%; justify-content:space-between; }
+    .control-bar{ flex-direction:column; align-items:stretch; }
+    .host-wrap{ width:100%; }
+    .host-wrap input{ flex:1; width:auto; }
+    .sort-group{ overflow-x:auto; padding-bottom:2px; }
+
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tbody tr{
+      padding:12px 14px;
+      border-bottom:1px solid var(--line);
+      display:grid;
+      grid-template-columns:auto 1fr;
+      row-gap:8px;
+      column-gap:10px;
+    }
+    td{ padding:0; border:none; font-size:13px; }
+    td.cell-kantong{ grid-column:1; grid-row:1; }
+    td.cell-name{ grid-column:2; grid-row:1; text-align:right; }
+    td.cell-ping, td.cell-pl, td.cell-conn{
+      grid-column:1 / span 2;
+      display:flex;
+      justify-content:space-between;
+      font-size:12px;
+      color:var(--bone-dim);
+    }
+    td.cell-ping::before{ content:"Ping"; }
+    td.cell-pl::before{ content:"Packet Loss"; }
+    td.cell-conn::before{ content:"Koneksi"; }
+  }
+
+  a{ color:var(--blood-bright); }
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">IME <span>RP</span></div>
+    <div class="brand-sub">PLAYER MONITOR</div>
+  </div>
+  <div class="status-cluster">
+    <div class="status-badge pending" id="statusBadge">
+      <span class="status-dot"></span>
+      <span id="statusText">MENGHUBUNGKAN</span>
+    </div>
+    <div class="count-block">
+      <div class="num"><span id="onlineCount">--</span><span class="max"> / <span id="maxCount">--</span></span></div>
+      <label>PEMAIN ONLINE</label>
+    </div>
+  </div>
+</header>
+
+<section class="control-bar">
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="searchInput" type="text" placeholder="Cari nama pemain...">
+  </div>
+  <div class="sort-group">
+    <button class="sort-btn active" data-sort="kantong">Kantong</button>
+    <button class="sort-btn" data-sort="az">A → Z</button>
+    <button class="sort-btn" data-sort="za">Z → A</button>
+    <button class="sort-btn" data-sort="ping">Ping</button>
+  </div>
+  <div class="host-wrap">
+    <input id="hostInput" type="text" value="main.imeroleplay.com" spellcheck="false">
+    <button class="reconnect-btn" id="reconnectBtn">Reconnect</button>
+  </div>
+</section>
+
+<main>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:100px;">Kantong</th>
+          <th>Nama Pemain</th>
+          <th class="num" style="width:100px;">Ping</th>
+          <th class="num" style="width:120px;">Packet Loss</th>
+          <th style="width:110px;">Koneksi</th>
+        </tr>
+      </thead>
+      <tbody id="playerBody">
+        <tr class="empty-row"><td colspan="5"><span class="empty-icon">⛓</span>Mengambil data server...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<div class="foot-note">
+  <span id="lastUpdate">Belum ada data.</span>
+  <span id="netWarning" class="warn-text"></span>
+</div>
+
+<script>
+(function(){
+
+  const PORTS = [30120, 30121, 30122, 30123];
+  const REFRESH_MS = 5000;
+  const TIMEOUT_MS = 5000;
+  const PL_WINDOW = 12; // how many poll cycles we remember per player for packet-loss estimate
+
+  const statusBadge = document.getElementById('statusBadge');
+  const statusText = document.getElementById('statusText');
+  const onlineCountEl = document.getElementById('onlineCount');
+  const maxCountEl = document.getElementById('maxCount');
+  const playerBody = document.getElementById('playerBody');
+  const searchInput = document.getElementById('searchInput');
+  const hostInput = document.getElementById('hostInput');
+  const reconnectBtn = document.getElementById('reconnectBtn');
+  const lastUpdateEl = document.getElementById('lastUpdate');
+  const netWarningEl = document.getElementById('netWarning');
+  const sortButtons = document.querySelectorAll('.sort-btn');
+
+  let currentSort = 'kantong';
+  let searchTerm = '';
+  let lastPlayers = [];
+  let maxClients = null;
+  let pollCount = 0;
+  // presenceHistory[id] = array of booleans (true = seen this poll), newest last
+  const presenceHistory = {};
+
+  function fetchWithTimeout(url, ms){
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } })
+      .finally(() => clearTimeout(id));
+  }
+
+  async function tryFetchPlayers(host){
+    let lastErr = null;
+    for (const port of PORTS){
+      for (const scheme of ['https', 'http']){
+        const url = `${scheme}://${host}:${port}/players.json`;
+        try{
+          const res = await fetchWithTimeout(url, TIMEOUT_MS);
+          if (!res.ok) { lastErr = new Error('HTTP ' + res.status); continue; }
+          const data = await res.json();
+          if (!Array.isArray(data)) { lastErr = new Error('Format tidak dikenali'); continue; }
+          return { port, scheme, players: data };
+        } catch(err){
+          lastErr = err;
+          continue;
+        }
+      }
+    }
+    throw lastErr || new Error('Semua percobaan gagal');
+  }
+
+  async function tryFetchInfo(host, port, scheme){
+    try{
+      const res = await fetchWithTimeout(`${scheme}://${host}:${port}/dynamic.json`, TIMEOUT_MS);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data;
+    }catch(e){ return null; }
+  }
+
+  function pingClass(ping){
+    if (ping === null || ping === undefined || ping < 0) return '';
+    if (ping < 100) return 'good';
+    if (ping < 250) return 'warn';
+    return 'bad';
+  }
+
+  function updatePresence(players){
+    pollCount++;
+    const seenIds = new Set(players.map(p => String(p.id)));
+    // update everyone we've ever tracked
+    const allIds = new Set([...Object.keys(presenceHistory), ...seenIds]);
+    allIds.forEach(id => {
+      if (!presenceHistory[id]) presenceHistory[id] = [];
+      presenceHistory[id].push(seenIds.has(id));
+      if (presenceHistory[id].length > PL_WINDOW) presenceHistory[id].shift();
+    });
+  }
+
+  function packetLossFor(id){
+    const hist = presenceHistory[String(id)];
+    if (!hist || hist.length < 2) return null;
+    const missed = hist.filter(v => v === false).length;
+    return Math.round((missed / hist.length) * 100);
+  }
+
+  function plClass(pl){
+    if (pl === null) return '';
+    if (pl <= 5) return '';
+    if (pl <= 20) return 'warn';
+    return 'bad';
+  }
+
+  function connTag(ping, pl){
+    const p = ping ?? 0;
+    const l = pl ?? 0;
+    if (l > 20 || p > 250) return { label: 'Buruk', cls: 'buruk' };
+    if (l > 5 || p > 100) return { label: 'Sedang', cls: 'sedang' };
+    return { label: 'Stabil', cls: 'stabil' };
+  }
+
+  function sortPlayers(list){
+    const sorted = [...list];
+    switch(currentSort){
+      case 'az':
+        sorted.sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), 'id', {sensitivity:'base'}));
+        break;
+      case 'za':
+        sorted.sort((a,b) => String(b.name||'').localeCompare(String(a.name||''), 'id', {sensitivity:'base'}));
+        break;
+      case 'ping':
+        sorted.sort((a,b) => (a.ping ?? 999999) - (b.ping ?? 999999));
+        break;
+      case 'kantong':
+      default:
+        sorted.sort((a,b) => (parseInt(a.id,10)||0) - (parseInt(b.id,10)||0));
+        break;
+    }
+    return sorted;
+  }
+
+  function render(){
+    let list = sortPlayers(lastPlayers);
+
+    if (searchTerm.trim()){
+      const q = searchTerm.trim().toLowerCase();
+      list = list.filter(p => String(p.name||'').toLowerCase().includes(q));
+    }
+
+    onlineCountEl.textContent = lastPlayers.length;
+    maxCountEl.textContent = maxClients !== null ? maxClients : '--';
+
+    playerBody.innerHTML = '';
+
+    if (list.length === 0){
+      const tr = document.createElement('tr');
+      tr.className = 'empty-row';
+      const msg = lastPlayers.length === 0
+        ? 'Tidak ada pemain online saat ini.'
+        : 'Tidak ada nama pemain yang cocok dengan pencarian.';
+      tr.innerHTML = `<td colspan="5"><span class="empty-icon">⛓</span>${msg}</td>`;
+      playerBody.appendChild(tr);
+      return;
+    }
+
+    list.forEach(p => {
+      const ping = (typeof p.ping === 'number') ? p.ping : null;
+      const pl = packetLossFor(p.id);
+      const conn = connTag(ping, pl);
+      const name = String(p.name || 'Tidak diketahui');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="cell-kantong"><span class="kantong-pill">${escapeHtml(String(p.id ?? '?'))}</span></td>
+        <td class="cell-name player-name">${escapeHtml(name)}</td>
+        <td class="cell-ping num"><span class="ping-val ${pingClass(ping)}">${ping !== null ? ping + ' ms' : '—'}</span></td>
+        <td class="cell-pl num"><span class="pl-val ${plClass(pl)}">${pl !== null ? pl + '%' : '—'}</span></td>
+        <td class="cell-conn"><span class="conn-tag ${conn.cls}">${conn.label}</span></td>
+      `;
+      playerBody.appendChild(tr);
+    });
+  }
+
+  function escapeHtml(str){
+    return str.replace(/[&<>"']/g, ch => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[ch]));
+  }
+
+  function setStatus(state, text){
+    statusBadge.className = 'status-badge ' + state;
+    statusText.textContent = text;
+  }
+
+  async function poll(){
+    const host = hostInput.value.trim() || 'main.imeroleplay.com';
+    try{
+      const { port, scheme, players } = await tryFetchPlayers(host);
+      lastPlayers = players;
+      updatePresence(players);
+      setStatus('up', 'SERVER UP');
+      netWarningEl.textContent = '';
+
+      const info = await tryFetchInfo(host, port, scheme);
+      if (info){
+        const sv = info.vars || {};
+        maxClients = info.sv_maxclients || sv.sv_maxclients || maxClients;
+      }
+
+      lastUpdateEl.textContent = `Terhubung ke ${host}:${port} (${scheme}) — diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
+      render();
+    } catch(err){
+      setStatus('down', 'SERVER DOWN');
+      lastUpdateEl.textContent = `Gagal terhubung ke ${host} — ${new Date().toLocaleTimeString('id-ID')}`;
+      netWarningEl.textContent = 'Kemungkinan: server offline, port ditutup, players.json dinonaktifkan, atau diblokir kebijakan CORS browser.';
+      lastPlayers = [];
+      render();
+    }
+  }
+
+  searchInput.addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    render();
+  });
+
+  sortButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      sortButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentSort = btn.dataset.sort;
+      render();
+    });
+  });
+
+  reconnectBtn.addEventListener('click', () => {
+    setStatus('pending', 'MENGHUBUNGKAN');
+    Object.keys(presenceHistory).forEach(k => delete presenceHistory[k]);
+    pollCount = 0;
+    poll();
+  });
+
+  poll();
+  setInterval(poll, REFRESH_MS);
+
+})();
+</script>
+</body>
+</html>
