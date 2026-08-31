@@ -398,7 +398,7 @@
 <script>
 (function(){
 
-  const PORTS = [30120, 30121, 30122, 30123];
+  const PORTS = [30120]; // Port server FiveM yang diproxy Vercel
   const REFRESH_MS = 5000;
   const TIMEOUT_MS = 5000;
   const PL_WINDOW = 12; // how many poll cycles we remember per player for packet-loss estimate
@@ -430,32 +430,37 @@
       .finally(() => clearTimeout(id));
   }
 
+  // Browser hanya memanggil endpoint Vercel yang satu origin.
+  // Vercel kemudian me-rewrite /api/players ke server FiveM.
   async function tryFetchPlayers(host){
-    let lastErr = null;
-    for (const port of PORTS){
-      for (const scheme of ['https', 'http']){
-        const url = `${scheme}://${host}:${port}/players.json`;
-        try{
-          const res = await fetchWithTimeout(url, TIMEOUT_MS);
-          if (!res.ok) { lastErr = new Error('HTTP ' + res.status); continue; }
-          const data = await res.json();
-          if (!Array.isArray(data)) { lastErr = new Error('Format tidak dikenali'); continue; }
-          return { port, scheme, players: data };
-        } catch(err){
-          lastErr = err;
-          continue;
-        }
-      }
+    const res = await fetchWithTimeout('/api/players', TIMEOUT_MS);
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const errData = await res.json();
+        detail = errData.error ? ': ' + errData.error : '';
+      } catch(e) {}
+      throw new Error('HTTP ' + res.status + detail);
     }
-    throw lastErr || new Error('Semua percobaan gagal');
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error('Format players.json tidak dikenali');
+    }
+
+    return {
+      port: 30120,
+      scheme: 'Vercel Proxy',
+      players: data
+    };
   }
 
   async function tryFetchInfo(host, port, scheme){
     try{
-      const res = await fetchWithTimeout(`${scheme}://${host}:${port}/dynamic.json`, TIMEOUT_MS);
+      const res = await fetchWithTimeout('/api/info', TIMEOUT_MS);
       if (!res.ok) return null;
-      const data = await res.json();
-      return data;
+      return await res.json();
     }catch(e){ return null; }
   }
 
@@ -588,12 +593,12 @@
         maxClients = info.sv_maxclients || sv.sv_maxclients || maxClients;
       }
 
-      lastUpdateEl.textContent = `Terhubung ke ${host}:${port} (${scheme}) — diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
+      lastUpdateEl.textContent = `Terhubung ke ${host}:${port} via Vercel Proxy — diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
       render();
     } catch(err){
       setStatus('down', 'SERVER DOWN');
       lastUpdateEl.textContent = `Gagal terhubung ke ${host} — ${new Date().toLocaleTimeString('id-ID')}`;
-      netWarningEl.textContent = 'Kemungkinan: server offline, port ditutup, players.json dinonaktifkan, atau diblokir kebijakan CORS browser.';
+      netWarningEl.textContent = 'Proxy Vercel gagal mengambil data dari server FiveM. Cek deployment/function Vercel.';
       lastPlayers = [];
       render();
     }
