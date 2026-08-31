@@ -598,7 +598,7 @@
     } catch(err){
       setStatus('down', 'SERVER DOWN');
       lastUpdateEl.textContent = `Gagal terhubung ke ${host} — ${new Date().toLocaleTimeString('id-ID')}`;
-      netWarningEl.textContent = 'Proxy Vercel gagal mengambil data dari server FiveM. Cek deployment/function Vercel.';
+      netWarningEl.textContent = 'Proxy Vercel gagal mengambil data. Pastikan folder /api ikut ter-deploy dan Function dapat menjangkau server FiveM.';
       lastPlayers = [];
       render();
     }
