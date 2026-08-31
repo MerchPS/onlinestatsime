@@ -1,10 +1,12 @@
 {
-  "functions": {
-    "api/players.js": {
-      "maxDuration": 10
+  "rewrites": [
+    {
+      "source": "/api/players",
+      "destination": "http://main.imeroleplay.com:30120/players.json"
     },
-    "api/info.js": {
-      "maxDuration": 10
+    {
+      "source": "/api/info",
+      "destination": "http://main.imeroleplay.com:30120/dynamic.json"
     }
-  }
+  ]
 }
